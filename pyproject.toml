@@ -1,11 +1,11 @@
 [tool.poetry]
-name = "better-replit-db"
+name = "betterreplitdb"
 version = "0.0.1"
 description = "Replit DB with a memcache"
 authors = ["Dev380"]
 license = "ISC"
 readme = "README.md"
-packages = [{include = "better_replit_db"}]
+packages = [{include = "betterreplitdb"}]
 
 [tool.poetry.dependencies]
 python = "^3.8"
