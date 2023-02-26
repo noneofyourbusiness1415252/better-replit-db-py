@@ -19,7 +19,7 @@ async_db = AsyncDatabase(replit_db_url)
 with
 
 ``` python
-from better-replit-db import AsyncDatabase
+from betterreplitdb import AsyncDatabase
 
 async_db = AsyncDatabase(replit_db_url)
 async_db.init_cache()
@@ -38,7 +38,7 @@ from replit import db
 with
 
 ``` python
-from better-replit-db import db
+from betterreplitdb import db
 ```
 
 ## Version Tracking
