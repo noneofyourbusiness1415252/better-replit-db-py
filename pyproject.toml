@@ -5,13 +5,13 @@ description = "Replit DB with a memcache"
 authors = ["Dev380"]
 license = "ISC"
 readme = "README.md"
-packages = [{include = "betterreplitdb"}]
 
 [tool.poetry.dependencies]
 python = "^3.8"
 aiohttp = "3.6.2"
 requests = "2.25.1"
 black = "^23.1.0"
+twine = "^4.0.2"
 
 
 [build-system]
