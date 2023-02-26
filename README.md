@@ -45,9 +45,9 @@ from better-replit-db import db
 
 This repo is up to date with the [main repo](https://github.com/replit/replit-py) with commits:
 
-- https://github.com/replit/replit-py/commit/b36030a22281542fb755aa8505b3e2e020a9d18d database.py
-- https://github.com/replit/replit-py/commit/a48d6a2bec48377e50936cb2835bf8222589b6f1 src/replit/database/default_db.py
-- https://github.com/replit/replit-py/commit/59225fb2f9cd1b22087a08876756a287604e0552 unit tests
+- [replit@b36030a](https://github.com/replit/replit-py/commit/b36030a22281542fb755aa8505b3e2e020a9d18d) database.py
+- [replit@a48d6a2](https://github.com/replit/replit-py/commit/a48d6a2bec48377e50936cb2835bf8222589b6f1) src/replit/database/default_db.py
+- [replit@59225fb](https://github.com/replit/replit-py/commit/59225fb2f9cd1b22087a08876756a287604e0552) unit tests
 
 If these are not the latest commits on these files, please open an issue/PR.
 
