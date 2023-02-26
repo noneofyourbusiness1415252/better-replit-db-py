@@ -4,13 +4,13 @@
 import os
 import unittest
 
-from replit.database import AsyncDatabase, Database
+from better-replit-db import AsyncDatabase, Database
 
 import requests
 
 
 class TestAsyncDatabase(unittest.IsolatedAsyncioTestCase):
-    """Tests for replit.database.AsyncDatabase."""
+    """Tests for better-replit-db.AsyncDatabase."""
 
     async def asyncSetUp(self) -> None:
         """Grab a JWT for all the tests to share."""
@@ -111,7 +111,7 @@ class TestAsyncDatabase(unittest.IsolatedAsyncioTestCase):
 
 
 class TestDatabase(unittest.TestCase):
-    """Tests for replit.database.Database."""
+    """Tests for better-replit-db.Database."""
 
     def setUp(self) -> None:
         """Grab a JWT for all the tests to share."""
