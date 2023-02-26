@@ -1,5 +1,5 @@
 # flake8: noqa# flake8: noqa
-"""Tests for replit.database."""
+"""Tests for better-replit-db."""
 
 import os
 import unittest
