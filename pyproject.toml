@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "betterreplitdb"
-version = "0.0.2"
+version = "0.0.3"
 description = "Replit DB with a memcache"
 authors = ["Dev380"]
 license = "ISC"
