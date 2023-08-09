@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "betterreplitdb"
-version = "0.0.3"
+version = "0.0.4"
 description = "Replit DB with a memcache"
 authors = ["Dev380"]
 license = "ISC"
@@ -10,9 +10,10 @@ readme = "README.md"
 python = "^3.8"
 aiohttp = "^3.6.2"
 requests = "^2.25.1"
-black = "^23.1.0"
+aiohttp-retry = "^2.8.3"
+[tool.poetry.dev-dependencies]
 twine = "^4.0.2"
-
+black = "^23.1.0"
 
 [build-system]
 requires = ["poetry-core"]
