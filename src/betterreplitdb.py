@@ -15,7 +15,7 @@ from typing import (
 )
 import urllib
 import asyncio
-from os import environ
+from os import environ, path
 
 import aiohttp
 import requests
