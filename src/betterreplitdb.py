@@ -59,21 +59,32 @@ _dumps = dumps
 class AsyncDatabaseNoCache:
     """Async interface for Repl.it Database."""
 
-    __slots__ = ("db_url", "sess")
+    __slots__ = ("db_url", "sess", "client")
 
-    def __init__(self, db_url: str) -> None:
+    def __init__(self, db_url: str, retry_options: int = 5) -> None:
         """Initialize database. You shouldn't have to do this manually.
         Args:
             db_url (str): Database url to use.
+            retry_count (int): How many times to retry connecting
+                (with exponential backoff)
         """
-
+        retry_options = ExponentialRetry(attempts=retry_count)
+        self.client = RetryClient(client_session=self.sess, retry_options=retry_options)
         self.db_url = db_url
         self.sess = aiohttp.ClientSession()
+
+    def update_db_url(self, db_url: str) -> None:
+        """Update the database url.
+        Args:
+            db_url (str): Database url to use.
+        """
+        self.db_url = db_url
 
     async def __aenter__(self) -> "AsyncDatabaseNoCache":
         return self
 
     async def __aexit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        await self.client.close()
         await self.sess.close()
 
     async def get(self, key: str) -> str:
@@ -83,7 +94,7 @@ class AsyncDatabaseNoCache:
         Args:
             key (str): The key to retreive
         Returns:
-            str: The the value for key if key is in the database.
+            str: The value for key if key is in the database.
         """
         return json.loads(await self.get_raw(key))
 
@@ -96,7 +107,7 @@ class AsyncDatabaseNoCache:
         Returns:
             str: The value of the key
         """
-        async with self.sess.get(
+        async with self.client.get(
             self.db_url + "/" + urllib.parse.quote(key)
         ) as response:
             if response.status == 404:
@@ -143,9 +154,7 @@ class AsyncDatabaseNoCache:
         Raises:
             KeyError: Key does not exist
         """
-        async with self.sess.delete(
-            self.db_url + "/" + urllib.parse.quote(key)
-        ) as response:
+        async with self.client.post(self.db_url, data=values) as response:
             if response.status == 404:
                 raise KeyError(key)
             response.raise_for_status()
@@ -158,7 +167,7 @@ class AsyncDatabaseNoCache:
             Tuple[str]: The keys found.
         """
         params = {"prefix": prefix, "encode": "true"}
-        async with self.sess.get(self.db_url, params=params) as response:
+        async with self.client.get(self.db_url, params=params) as response:
             response.raise_for_status()
             text = await response.text()
             if not text:
@@ -215,40 +224,43 @@ class AsyncDatabase(AsyncDatabaseNoCache):
 
     __slots__ = "cache"
 
-    def __init__(self, db_url: str) -> None:
+    def __init__(self, db_url: str, retry_options: int = 5) -> None:
         """Initialize database. You shouldn't have to do this manually.
         Must call `init_cache` after initialization or the DB won't work.
         Args:
             db_url (str): Database url to use.
+            retry_count (int): How many times to retry connecting
+                (with exponential backoff)
         """
         super().__init__(db_url)
 
     # Reimplement to_dict from AsyncDatabaseNoCache because apparently it's trying to use this class's implementation of list before the cache is initialized.
     async def init_cache(self) -> None:
-      """Initialize the cache for the database.
-      This exists because it keeps trying to use the cache before it's initialized, so it has to be initialized without a cache explicitly. If someone has a better solution please let me know on GitHub."""
-      # List keys
-      keys = []
+        """Initialize the cache for the database.
+        This exists because it keeps trying to use the cache before it's initialized, so it has to be initialized without a cache explicitly. If someone has a better solution please let me know on GitHub.
+        """
+        # List keys
+        keys = []
 
-      params = {"prefix": "", "encode": "true"}
-      async with super().sess.get(super().db_url, params=params) as response:
-        response.raise_for_status()
-        text = await response.text()
-        if text:
-            keys = list(urllib.parse.unquote(k) for k in text.split("\n"))
+        params = {"prefix": "", "encode": "true"}
+        async with super().sess.get(super().db_url, params=params) as response:
+            response.raise_for_status()
+            text = await response.text()
+            if text:
+                keys = list(urllib.parse.unquote(k) for k in text.split("\n"))
 
-      # Init cache
-      self.cache = {}
+        # Init cache
+        self.cache = {}
 
-      # Get the values for each key
-      for key in keys:
-        async with super().sess.get(
-          super().db_url + "/" + urllib.parse.quote(key)
-        ) as response:
-          if response.status == 404:
-            raise KeyError(key)
-          response.raise_for_status()
-          self.cache[key] = json.loads(await response.text())
+        # Get the values for each key
+        for key in keys:
+            async with super().sess.get(
+                super().db_url + "/" + urllib.parse.quote(key)
+            ) as response:
+                if response.status == 404:
+                    raise KeyError(key)
+                response.raise_for_status()
+                self.cache[key] = json.loads(await response.text())
 
     async def get_raw(self, key: str) -> str:
         """Get the value of an item from the database.
@@ -317,6 +329,13 @@ class ObservedList(abc.MutableSequence):
     def on_mutate(self) -> None:
         """Calls the mutation handler with the underlying list as an argument."""
         self._on_mutate_handler(self.value)
+
+    def update_db_url(self, db_url: str) -> None:
+        """Update the database url.
+        Args:
+            db_url (str): Database url to use.
+        """
+        self.db_url = db_url
 
     def __getitem__(self, i: Union[int, slice]) -> Any:
         return self.value[i]
@@ -637,13 +656,20 @@ class DatabaseNoCache(abc.MutableMapping):
 
     __slots__ = ("db_url", "sess")
 
-    def __init__(self, db_url: str) -> None:
+    def __init__(self, db_url: str, retry_count: int = 5) -> None:
         """Initialize database. You shouldn't have to do this manually.
         Args:
             db_url (str): Database url to use.
+            retry_count (int): How many times to retry connecting
+                (with exponential backoff)
         """
         self.db_url = db_url
         self.sess = requests.Session()
+        retries = Retry(
+            total=retry_count, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504]
+        )
+        self.sess.mount("http://", HTTPAdapter(max_retries=retries))
+        self.sess.mount("https://", HTTPAdapter(max_retries=retries))
 
     def __getitem__(self, key: str) -> Any:
         """Get the value of an item from the database.
@@ -676,7 +702,7 @@ class DatabaseNoCache(abc.MutableMapping):
             default (Any): The default to return if the key is not the database.
                 Defaults to None.
         Returns:
-            Any: The the value for key if key is in the database, else default.
+            Any: The value for key if key is in the database, else default.
         """
         return super().get(key, item_to_observed(_get_set_cb(self, key), default))
 
@@ -812,10 +838,12 @@ class Database(DatabaseNoCache):
 
     __slots__ = "cache"
 
-    def __init__(self, db_url: str) -> None:
+    def __init__(self, db_url: str, retry_count: int = 5) -> None:
         """Initialize database. You shouldn't have to do this manually.
         Args:
             db_url (str): Database url to use.
+            retry_count (int): How many times to retry connecting
+                (with exponential backoff)
         """
         super().__init__(db_url)
 
@@ -869,10 +897,36 @@ class Database(DatabaseNoCache):
 
 # github.com/replit/replit-py/blob/master/src/replit/database/default_db.py
 
+
+def get_db_url() -> str:
+    """
+    Fetches the most up-to-date db url from the Repl environment.
+    """
+    if path.exists("/tmp/replitdb"):
+        with open("/tmp/replitdb", "r") as file:
+            db_url = file.read()
+    else:
+        db_url = environ.get("REPLIT_DB_URL")
+
+    return db_url
+
+
+def refresh_db() -> None:
+    """Refresh the DB URL every hour"""
+    global db
+    db_url = get_db_url()
+    db.update_db_url(db_url)
+    threading.Timer(3600, refresh_db).start()
+
+
 db: Optional[Database]
-db_url = environ.get("REPLIT_DB_URL")
+db_url = get_db_url()
 if db_url:
     db = Database(db_url)
+    refresh_db()
 else:
-    # The user will see errors if they try to use the database.
+    print(
+        "\x1b[33mWarning: error initializing database. Replit DB is not"
+        " configured.\x1b[0m"
+    )
     db = None
