@@ -62,7 +62,7 @@ class AsyncDatabaseNoCache:
 
     __slots__ = ("db_url", "sess", "client")
 
-    def __init__(self, db_url: str, retry_options: int = 5) -> None:
+    def __init__(self, db_url: str, retry_count: int = 5) -> None:
         """Initialize database. You shouldn't have to do this manually.
         Args:
             db_url (str): Database url to use.
