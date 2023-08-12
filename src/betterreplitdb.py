@@ -13,12 +13,13 @@ from typing import (
     Tuple,
     Union,
 )
-import urllib
-import asyncio
+import urllib, asyncio, threading
 from os import environ, path
 
 import aiohttp
+from aiohttp_retry import ExponentialRetry, RetryClient  # type: ignore
 import requests
+from requests.adapters import HTTPAdapter, Retry
 
 
 def to_primitive(o: Any) -> Any:
@@ -232,7 +233,7 @@ class AsyncDatabase(AsyncDatabaseNoCache):
             retry_count (int): How many times to retry connecting
                 (with exponential backoff)
         """
-        super().__init__(db_url)
+        super().__init__(db_url, retry_options)
 
     # Reimplement to_dict from AsyncDatabaseNoCache because apparently it's trying to use this class's implementation of list before the cache is initialized.
     async def init_cache(self) -> None:
@@ -329,13 +330,6 @@ class ObservedList(abc.MutableSequence):
     def on_mutate(self) -> None:
         """Calls the mutation handler with the underlying list as an argument."""
         self._on_mutate_handler(self.value)
-
-    def update_db_url(self, db_url: str) -> None:
-        """Update the database url.
-        Args:
-            db_url (str): Database url to use.
-        """
-        self.db_url = db_url
 
     def __getitem__(self, i: Union[int, slice]) -> Any:
         return self.value[i]
@@ -671,6 +665,13 @@ class DatabaseNoCache(abc.MutableMapping):
         self.sess.mount("http://", HTTPAdapter(max_retries=retries))
         self.sess.mount("https://", HTTPAdapter(max_retries=retries))
 
+    def update_db_url(self, db_url: str) -> None:
+        """Update the database url.
+        Args:
+            db_url (str): Database url to use.
+        """
+        self.db_url = db_url
+
     def __getitem__(self, key: str) -> Any:
         """Get the value of an item from the database.
         Will replace the mutable JSON types of dict and list with subclasses that
@@ -836,7 +837,7 @@ class Database(DatabaseNoCache):
     don't want this, use AsyncDatabase instead.
     """
 
-    __slots__ = "cache"
+    __slots__ = "cache", "sess"
 
     def __init__(self, db_url: str, retry_count: int = 5) -> None:
         """Initialize database. You shouldn't have to do this manually.
@@ -846,13 +847,10 @@ class Database(DatabaseNoCache):
                 (with exponential backoff)
         """
         super().__init__(db_url)
-
-        self.cache = {}
-        for key in super().keys():
-            self.cache[key] = super()[key]
+        self.cache = {k: v for k, v in DatabaseNoCache(db_url).items()}
 
     def get_raw(self, key: str) -> str:
-        """Look up the given key in the database and return the corresponding value.
+        """Look up the given key in the cache and convert it to a string
         Args:
             key (str): The key to look up
         Raises:
@@ -860,7 +858,7 @@ class Database(DatabaseNoCache):
         Returns:
             str: The value of the key in the database.
         """
-        return self.cache[key]
+        return f"{self.cache[key]}"
 
     def set_bulk_raw(self, values: Dict[str, str]) -> None:
         """Set multiple values in the database.
@@ -892,7 +890,7 @@ class Database(DatabaseNoCache):
         Returns:
             Tuple[str]: The keys found.
         """
-        return tuple(filter(lambda key: key.startswith(prefix), self.cache.keys()))
+        return (*(k for k in self.cache.keys() if k.startswith(prefix)),)
 
 
 # github.com/replit/replit-py/blob/master/src/replit/database/default_db.py
