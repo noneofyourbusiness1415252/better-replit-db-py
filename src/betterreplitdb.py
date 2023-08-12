@@ -840,56 +840,21 @@ class Database(DatabaseNoCache):
     __slots__ = "cache", "sess"
 
     def __init__(self, db_url: str, retry_count: int = 5) -> None:
-        """Initialize database. You shouldn't have to do this manually.
-        Args:
-            db_url (str): Database url to use.
-            retry_count (int): How many times to retry connecting
-                (with exponential backoff)
-        """
         super().__init__(db_url)
         self.cache = {k: v for k, v in DatabaseNoCache(db_url).items()}
 
     def get_raw(self, key: str) -> str:
-        """Look up the given key in the cache and convert it to a string
-        Args:
-            key (str): The key to look up
-        Raises:
-            KeyError: The key is not in the database.
-        Returns:
-            str: The value of the key in the database.
-        """
         return f"{self.cache[key]}"
 
     def set_bulk_raw(self, values: Dict[str, str]) -> None:
-        """Set multiple values in the database.
-        Args:
-            values (Dict[str, str]): The key-value pairs to set.
-        """
         self.cache.update(values)
-
-        r = self.sess.post(self.db_url, data=values)
-        r.raise_for_status()
+        super().set_bulk_raw(values)
 
     def __delitem__(self, key: str) -> None:
-        """Delete a key from the database.
-        Args:
-            key (str): The key to delete
-        Raises:
-            KeyError: Key is not set
-        """
         del self.cache[key]
-
-        r = self.sess.delete(self.db_url + "/" + urllib.parse.quote(key))
-        r.raise_for_status()
+        super().__delitem__(key)
 
     def prefix(self, prefix: str) -> Tuple[str, ...]:
-        """Return all of the keys in the database that begin with the prefix.
-        Args:
-            prefix (str): The prefix the keys must start with,
-                blank means anything.
-        Returns:
-            Tuple[str]: The keys found.
-        """
         return (*(k for k in self.cache.keys() if k.startswith(prefix)),)
 
 
